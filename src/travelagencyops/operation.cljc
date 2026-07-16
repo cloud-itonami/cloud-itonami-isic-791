@@ -1,7 +1,7 @@
 (ns travelagencyops.operation
   "OperationActor -- langgraph-clj StateGraph actor. Advisor (LLM) sealed
   in :advise node, always routed through Governor (:govern) and phase gate
-  (:decide) before commit.")
+  (:decide) before commit."
   (:require [langgraph.graph :as g]
             [langgraph.checkpoint :as cp]
             [travelagencyops.travelagencyopsllm :as llm]

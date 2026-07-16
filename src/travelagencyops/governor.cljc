@@ -2,7 +2,7 @@
   "TravelAgencyOps Governor -- independent compliance layer. Three HARD checks:
   1. Booking/client-record verified (registered? + verified?)
   2. Effect is :propose (rejected outright otherwise)
-  3. Scope exclusion (no visa/insurance/refund/authority overrides)")
+  3. Scope exclusion (no visa/insurance/refund/authority overrides)"
   (:require [travelagencyops.facts :as facts]
             [travelagencyops.store :as store]))
 
