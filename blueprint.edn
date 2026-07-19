@@ -1,4 +1,4 @@
-{:itonami.blueprint/id "cloud-itonami-791"
+{:itonami.blueprint/id "cloud-itonami-isic-791"
  :itonami.blueprint/name "Travel Agency Booking Coordination"
  :itonami.blueprint/isic-rev5 "791"
  :itonami.blueprint/domain :travel/booking-coordination
