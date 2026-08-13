@@ -1,5 +1,6 @@
 (ns travelagencyops.sim
-  "TravelAgencyOps simulation harness -- demo actor with mock advisor and in-memory store.")
+  "TravelAgencyOps simulation harness -- demo actor with mock advisor and in-memory store."
+  (:require [travelagencyops.store :as store]))
 
 (defn -main [& args]
   (println "TravelAgencyOps ISIC-791 Actor -- Travel Agency Booking Coordination")
@@ -27,10 +28,17 @@
   (println "  Phase 3: Fully autonomous")
   (println)
 
-  (println "Store initialized with demo booking:")
-  (println "  booking-001: Alice Chen, Tokyo 2026-08-01 to 08-08")
-  (println "  client-001: verified")
-  (println)
+  ;; printed from the seed itself, so this never drifts from store.cljc
+  (let [st (store/demo-store)
+        clients (store/all-clients st)]
+    (println "Store initialized with demo bookings:")
+    (doseq [[id b] (sort-by key (store/all-bookings st))]
+      (println (str "  " id ": "
+                    (get-in clients [(:client-id b) :name])
+                    ", " (:destination b)
+                    " " (:departure-date b) " to " (:return-date b)
+                    (when-not (:verified? b) "  [NOT KYC-verified]"))))
+    (println))
 
   (println "Ready for deployment.")
   (println)
