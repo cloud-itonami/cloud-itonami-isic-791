@@ -500,7 +500,7 @@
                      " at the human gate</span> &middot; "
                      "<span class=\"muted\">the fact does not retain who rejected it</span>")
                 :committed
-                (str "<span class=\"ok\">written to the SSoT</span>")
+                "<span class=\"ok\">written to the SSoT</span>"
                 "")))))
 
 (defn render
