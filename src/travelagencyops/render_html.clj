@@ -297,18 +297,25 @@
           ops)))
 
 (defn measure-phases
-  "Runs `phase/gate` for every (op x phase) pair against a clean
-  governor verdict, so the matrix is the phase gate's own answers."
+  "Runs `phase/gate` for every (op x phase) pair. The base disposition
+  fed to the gate is not assumed clean -- it is `governor/check`'s real
+  verdict for that op on a clean, high-confidence proposal against a
+  verified record, put through `phase/verdict->disposition`. That
+  matters: `:flag-safety-concern` is high-stakes, so its base is
+  `:escalate`, and only then does the phase-2 safety carve-out show up."
   []
-  (let [clean {:hard? false :escalate? false :confidence 0.9}
-        base (phase/verdict->disposition clean)]
+  (let [st (probe-store)
+        ctx {:actor-id "probe"}]
     (mapv (fn [o]
-            {:op o
-             :cells (mapv (fn [ph]
-                            (let [{:keys [disposition reason]}
-                                  (phase/gate ph {:op o} base)]
-                              {:phase ph :disposition disposition :reason reason}))
-                          phases)})
+            (let [verdict (governor/check {:op o :subject "probe-ok"} ctx probe-clean st)
+                  base (phase/verdict->disposition verdict)]
+              {:op o
+               :base base
+               :cells (mapv (fn [ph]
+                              (let [{:keys [disposition reason]}
+                                    (phase/gate ph {:op o} base)]
+                                {:phase ph :disposition disposition :reason reason}))
+                            phases)}))
           ops)))
 
 ;; ─────────────────────────── rendering ───────────────────────────
@@ -322,6 +329,8 @@
 (defn- yn [b] (if b "<span class=\"warn\">yes</span>" "<span class=\"muted\">no</span>"))
 
 (defn- kw [v] (if (keyword? v) (name v) (str v)))
+
+(defn- plural [n word] (if (= 1 n) word (str word "s")))
 
 (defn- audit-facts
   "Every audit fact the run emitted, thread by thread, in scenario order."
@@ -340,15 +349,19 @@
 (defn- approver-cell
   "Approver provenance for a booking, DERIVED -- checks whether the store
   actually retained `:approved-by` rather than assuming it does, so the
-  page self-corrects if `store/commit-record!` changes."
-  [rec facts subject]
-  (let [in-record (get rec :approved-by)
+  page self-corrects if `store/commit-record!` changes. A booking that
+  was never committed says so, rather than reading as if it had been
+  auto-committed with nobody approving it."
+  [rec ledger facts subject]
+  (let [committed? (boolean (some #(and (= subject (:subject %)) (= :committed (:t %))) ledger))
+        in-record (get rec :approved-by)
         in-audit (approval-granted-by facts subject)]
     (cond
       (some? in-record) (str "<span class=\"ok\">" (esc in-record) "</span>")
       (some? in-audit) (str "<span class=\"warn\">" (esc in-audit)
                             " (audit only &mdash; not retained in record)</span>")
-      :else "<span class=\"muted\">auto-committed &middot; no human approver</span>")))
+      committed? "<span class=\"muted\">auto-committed &middot; no human approver</span>"
+      :else "<span class=\"muted\">never committed</span>")))
 
 (defn- last-ledger-fact [ledger subject]
   (last (filter #(= subject (:subject %)) ledger)))
@@ -384,7 +397,7 @@
                   "<span class=\"ok\">complete</span>"
                   "<span class=\"muted\">incomplete</span>")
                 (esc (kw (or (:status rec) "—")))
-                (str (approver-cell rec facts id)
+                (str (approver-cell rec ledger facts id)
                      "<br>" (outcome-cell ledger id)))))))
 
 (defn- gate-rows [gates]
@@ -406,8 +419,9 @@
 
 (defn- phase-rows [matrix]
   (str/join "\n"
-    (for [{:keys [op cells]} matrix]
+    (for [{:keys [op base cells]} matrix]
       (str "        <tr><td><code>:" (esc (name op)) "</code></td>"
+           "<td><code>" (esc (kw base)) "</code></td>"
            (str/join
             (for [{:keys [disposition reason]} cells]
               (str "<td>"
@@ -481,8 +495,10 @@
                 (str "<span class=\"critical\">HARD hold &middot; "
                      (esc (str/join ", " (map kw (:basis f)))) "</span>")
                 :approval-rejected
-                (str "<span class=\"err\">rejected by the human reviewer ("
-                     (esc (kw human)) ")</span>")
+                (str "<span class=\"err\">"
+                     (esc (kw (or human :rejected)))
+                     " at the human gate</span> &middot; "
+                     "<span class=\"muted\">the fact does not retain who rejected it</span>")
                 :committed
                 (str "<span class=\"ok\">written to the SSoT</span>")
                 "")))))
@@ -512,10 +528,12 @@
      "<p class=\"subtitle\">Every cell below is the output of really running "
      "<code>travelagencyops.operation</code> → <code>travelagencyops.governor</code> → "
      "<code>travelagencyops.store</code> at build time. Nothing is transcribed by hand.</p>\n"
-     "<p class=\"banner\">This run: <strong class=\"num\">" n-commit "</strong> commits · "
-     "<strong class=\"num\">" n-approved "</strong> human approvals · "
-     "<strong class=\"num\">" n-rejected "</strong> human rejections · "
-     "<strong class=\"num\">" n-hard "</strong> HARD governor holds that never reached a human.</p>\n"
+     "<p class=\"banner\">This run: <strong class=\"num\">" n-commit "</strong> "
+     (plural n-commit "commit") " · "
+     "<strong class=\"num\">" n-approved "</strong> human " (plural n-approved "approval") " · "
+     "<strong class=\"num\">" n-rejected "</strong> human " (plural n-rejected "rejection") " · "
+     "<strong class=\"num\">" n-hard "</strong> HARD governor " (plural n-hard "hold")
+     " that never reached a human.</p>\n"
      "<main>\n"
 
      "  <section class=\"card\">\n"
@@ -546,11 +564,12 @@
 
      "  <section class=\"card\">\n"
      "    <h2>Rollout phase matrix — <code>phase/gate</code> for every op × phase</h2>\n"
-     "    <p class=\"muted\">Each cell is the disposition the phase gate returns for a clean "
-     "governor verdict, with the reason code it attaches. This actor runs at "
-     "<code>" (esc (kw (:phase operator))) "</code>.</p>\n"
+     "    <p class=\"muted\">Each cell is the disposition the phase gate returns, with the reason "
+     "code it attaches. The base disposition is not assumed: it is <code>governor/check</code>'s "
+     "real verdict for that op on a clean high-confidence proposal against a verified record. "
+     "This actor runs at <code>" (esc (kw (:phase operator))) "</code>.</p>\n"
      "    <table>\n"
-     "      <thead><tr><th>Op</th>"
+     "      <thead><tr><th>Op</th><th>Governor verdict</th>"
      (str/join (for [p phases] (str "<th><code>" (esc (name p)) "</code></th>")))
      "</tr></thead>\n"
      "      <tbody>\n" (phase-rows phase-matrix) "\n      </tbody>\n"
