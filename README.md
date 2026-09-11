@@ -22,16 +22,16 @@ decisions, or safety-authority overrides.
 
 ```bash
 # Mock advisor, demo simulation:
-nbb -m travelagencyops.sim
+kbb --backend sci -m travelagencyops.sim
 
 # Or Clojure:
-clojure -M:dev:run
+kbb -M:dev:run
 
 # Tests:
-clojure -M:dev:test
+kbb -M:dev:test
 
 # Lint:
-clojure -M:lint
+kbb -M:lint
 ```
 
 ## Governance
