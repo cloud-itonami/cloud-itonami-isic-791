@@ -2,7 +2,7 @@
   "Graph-level coverage for travelagencyops.operation/build -- the actual
   compiled langgraph-clj StateGraph (governor_test.cljc only exercises
   travelagencyops.governor directly, never through g/run*)."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [langgraph.graph :as g]
             [travelagencyops.operation :as op]
             [travelagencyops.store :as store]))
