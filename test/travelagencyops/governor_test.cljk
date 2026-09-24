@@ -1,7 +1,7 @@
 (ns travelagencyops.governor-test
   (:require [travelagencyops.governor :as governor]
             [travelagencyops.store :as store]
-            [clojure.test :refer [deftest is testing]]))
+            [kotoba.test :refer [deftest is testing]]))
 
 (deftest booking-record-check
   (testing "Unverified booking is rejected"
